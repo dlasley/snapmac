@@ -27,6 +27,7 @@
 - [ ] Decide on `SNAPMAC_PIN_VERSIONS` — wire it up in `snapshot.sh` or drop it
 - [ ] Test `restore.sh` end-to-end on a clean macOS install or VM
 - [ ] Consider snapshotting macOS system preferences via `defaults`
+- [ ] Change push strategy: overwrite static `restore.sh` + `Brewfile` at root of `snapmac-snapshots` instead of pushing timestamped dirs. Keeps remote repo tiny forever (git stores diffs). Local timestamped dirs can remain for local history. Update `push-snapshot.sh` to copy latest snapshot files to repo root and force-push.
 
 ## Known Issues
 - None currently
