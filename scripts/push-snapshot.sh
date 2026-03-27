@@ -19,6 +19,9 @@ err()   { printf "\033[1;31m==> ERROR:\033[0m %s\n" "$1"; }
 
 cd "$PROJECT_DIR"
 
+# Load .env if present
+[[ -f "$PROJECT_DIR/.env" ]] && source "$PROJECT_DIR/.env"
+
 # Determine which snapshot to push
 if [[ -n "${1:-}" ]]; then
     SNAPSHOT_DIR="$1"
@@ -34,11 +37,16 @@ fi
 SNAPSHOT_NAME="$(basename "$SNAPSHOT_DIR")"
 info "Pushing snapshot: $SNAPSHOT_NAME"
 
-# Check for remote
+# Configure remote from .env if not already set
 if ! git remote get-url origin &>/dev/null; then
-    err "No git remote 'origin' configured"
-    err "Add a remote with: git remote add origin <your-repo-url>"
-    exit 1
+    if [[ -n "${SNAPMAC_REMOTE_REPO:-}" ]]; then
+        git remote add origin "$SNAPMAC_REMOTE_REPO"
+        info "Remote 'origin' set to $SNAPMAC_REMOTE_REPO"
+    else
+        err "No git remote 'origin' configured"
+        err "Set SNAPMAC_REMOTE_REPO in .env or run: git remote add origin <your-repo-url>"
+        exit 1
+    fi
 fi
 
 # Ensure snapshots are not gitignored in this repo
