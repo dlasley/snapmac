@@ -28,6 +28,7 @@
 - [ ] Test `restore.sh` end-to-end on a clean macOS install or VM
 - [ ] Consider snapshotting macOS system preferences via `defaults`
 - [ ] Change push strategy: overwrite static `restore.sh` + `Brewfile` at root of `snapmac-snapshots` instead of pushing timestamped dirs. Keeps remote repo tiny forever (git stores diffs). Local timestamped dirs can remain for local history. Update `push-snapshot.sh` to copy latest snapshot files to repo root and force-push.
+- [ ] Pluggable storage backends: abstract push layer so users can push snapshots to GitHub, S3, GDrive, Dropbox, Azure, FTP, etc. Plan: keep `snapshot.sh` in bash; rewrite push layer in Python with a proper ABC that backend modules implement. Python 3 is already a de facto dependency (used inline for JSON parsing). Ship `git` and `s3` (boto3) as reference backends. Users implement a Python class for custom storage.
 
 ## Known Issues
 - None currently
