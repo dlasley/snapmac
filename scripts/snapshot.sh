@@ -2,10 +2,11 @@
 #
 # snapshot.sh — Evaluate installed software and generate a restore script.
 #
-# Usage: bash scripts/snapshot.sh [--version=exact]
+# Usage: bash scripts/snapshot.sh [--version=exact] [--push]
 #
 #   --version=exact   Pin all packages to the exact versions currently installed.
 #                     Default behavior installs latest versions.
+#   --push            After snapshotting, commit and push to the remote repo.
 #
 
 set -euo pipefail
@@ -15,12 +16,14 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 
 PIN_VERSIONS=false
+PUSH=false
 for arg in "$@"; do
     case "$arg" in
         --version=exact) PIN_VERSIONS=true ;;
+        --push)          PUSH=true ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: bash scripts/snapshot.sh [--version=exact]"
+            echo "Usage: bash scripts/snapshot.sh [--version=exact] [--push]"
             exit 1
             ;;
     esac
@@ -28,6 +31,13 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Ensure brew is on PATH (required when running from cron)
+if [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -f /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+fi
 TIMESTAMP="$(date +%Y-%m-%d_%H%M%S)"
 SNAPSHOT_DIR="$PROJECT_DIR/snapshots/$TIMESTAMP"
 
@@ -909,3 +919,8 @@ echo ""
 ok "Snapshot complete!"
 ok "Restore script: $RESTORE"
 ok "Run it on a new machine with: bash $RESTORE"
+
+if [[ "$PUSH" == true ]]; then
+    echo ""
+    bash "$SCRIPT_DIR/push-snapshot.sh" "$SNAPSHOT_DIR"
+fi

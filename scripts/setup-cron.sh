@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# setup-cron.sh — Interactively add auto-snapshot.sh to crontab.
+# setup-cron.sh — Interactively add snapshot.sh to crontab.
 #
 # Usage: bash scripts/setup-cron.sh
 #
@@ -8,19 +8,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUTO_SNAPSHOT="$SCRIPT_DIR/auto-snapshot.sh"
+SNAPSHOT="$SCRIPT_DIR/snapshot.sh"
+LOG_FILE="$(dirname "$SCRIPT_DIR")/snapshots/auto-snapshot.log"
 
 info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn()  { printf "\033[1;33m==> WARNING:\033[0m %s\n" "$1"; }
 ok()    { printf "\033[1;32m==>\033[0m %s\n" "$1"; }
 err()   { printf "\033[1;31m==> ERROR:\033[0m %s\n" "$1"; }
 
-if [[ ! -f "$AUTO_SNAPSHOT" ]]; then
-    err "auto-snapshot.sh not found at $AUTO_SNAPSHOT"
+if [[ ! -f "$SNAPSHOT" ]]; then
+    err "snapshot.sh not found at $SNAPSHOT"
     exit 1
 fi
 
-chmod +x "$AUTO_SNAPSHOT"
+chmod +x "$SNAPSHOT"
 
 echo ""
 info "How many times per day should the snapshot run?"
@@ -49,7 +50,7 @@ case "$FREQ" in
         ;;
 esac
 
-CRON_CMD="$CRON_SCHEDULE bash $AUTO_SNAPSHOT"
+CRON_CMD="$CRON_SCHEDULE bash $SNAPSHOT --push >> $LOG_FILE 2>&1"
 CRON_MARKER="# snapmac auto-snapshot"
 CRON_LINE="$CRON_CMD $CRON_MARKER"
 
