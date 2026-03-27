@@ -7,29 +7,30 @@
 **Date**: 2026-03-27
 
 ### Completed Work
-- Created `scripts/snapshot.sh` — single script that evaluates the current system
-- Generates `snapshots/<timestamp>/restore.sh` with all install commands
-- Covers: Homebrew formulae & casks, Mac App Store (mas), npm globals, pip3 user packages, pipx, VS Code extensions, unmanaged CLIs
-- Added `--version=exact` flag for version pinning
-- Added explicit package managers: Cargo, Ruby gems, Go binaries, Composer
-- Integrated `brew bundle` — generates a Brewfile alongside restore.sh
-- Manual install functions retained as fallback when Brewfile is missing
+- Created `scripts/snapshot.sh` with full package manager support and `--version=exact` flag
+- Integrated `brew bundle` for Brewfile generation; `restore.sh` handles Xcode CLT + Homebrew from scratch
+- Created GitHub repo: https://github.com/dlasley/snapmac (public)
+- Created private snapshot storage repo: https://github.com/dlasley/snapmac-snapshots
+- Added `.env` / `.env.example` with `SNAPMAC_REMOTE_REPO` and `SNAPMAC_PIN_VERSIONS`
+- `push-snapshot.sh` sources `.env` and auto-configures git remote on first run
+- Fixed `push-snapshot.sh` to treat `snapshots/` as an independent git repo (separate from snapmac)
+- Merged `auto-snapshot.sh` into `snapshot.sh` via `--push` flag; deleted `auto-snapshot.sh`
+- `setup-cron.sh` now registers `snapshot.sh --push` with logging to `snapshots/auto-snapshot.log`
+- Crontab configured: every 3 hours with `--push`
+- First snapshot generated locally; push tested via `push-snapshot.sh`
+- Added README
 
 ## Uncommitted Changes
-- `scripts/snapshot.sh` (new)
-- `PROGRESS.md` (new)
-- `.gitignore` (untracked)
+- None
 
 ## Pending Items
-- [ ] Initial commit
-- [ ] Simplify snapshot.sh — remove redundant manual brew/cask/mas/vscode sections once Brewfile path is fully validated
-- [ ] Test restore.sh on a clean machine or VM
+- [ ] Decide on `SNAPMAC_PIN_VERSIONS` — wire it up in `snapshot.sh` or drop it
+- [ ] Test `restore.sh` end-to-end on a clean macOS install or VM
+- [ ] Consider snapshotting macOS system preferences via `defaults`
 
 ## Known Issues
 - None currently
 
 ## Next Steps (Suggested)
-1. Commit initial project state
-2. Validate restore.sh end-to-end (ideally on a fresh macOS install or VM)
-3. Once Brewfile restore is validated, simplify by removing redundant manual install code
-4. Consider snapshotting macOS system preferences / defaults
+1. Wire up `SNAPMAC_PIN_VERSIONS` from `.env` in `snapshot.sh`, or remove it
+2. Validate `restore.sh` end-to-end on a fresh macOS install
