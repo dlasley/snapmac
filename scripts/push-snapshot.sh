@@ -22,11 +22,13 @@ cd "$PROJECT_DIR"
 # Load .env if present
 [[ -f "$PROJECT_DIR/.env" ]] && source "$PROJECT_DIR/.env"
 
+SNAPSHOTS_DIR="$PROJECT_DIR/snapshots"
+
 # Determine which snapshot to push
 if [[ -n "${1:-}" ]]; then
     SNAPSHOT_DIR="$1"
 else
-    SNAPSHOT_DIR="$(ls -td snapshots/*/ 2>/dev/null | head -1)"
+    SNAPSHOT_DIR="$(ls -td "$SNAPSHOTS_DIR"/*/ 2>/dev/null | head -1)"
 fi
 
 if [[ -z "$SNAPSHOT_DIR" || ! -d "$SNAPSHOT_DIR" ]]; then
@@ -37,10 +39,16 @@ fi
 SNAPSHOT_NAME="$(basename "$SNAPSHOT_DIR")"
 info "Pushing snapshot: $SNAPSHOT_NAME"
 
+# Initialize snapshots/ as its own git repo if needed
+if [[ ! -d "$SNAPSHOTS_DIR/.git" ]]; then
+    git -C "$SNAPSHOTS_DIR" init
+    info "Initialized git repo in snapshots/"
+fi
+
 # Configure remote from .env if not already set
-if ! git remote get-url origin &>/dev/null; then
+if ! git -C "$SNAPSHOTS_DIR" remote get-url origin &>/dev/null; then
     if [[ -n "${SNAPMAC_REMOTE_REPO:-}" ]]; then
-        git remote add origin "$SNAPMAC_REMOTE_REPO"
+        git -C "$SNAPSHOTS_DIR" remote add origin "$SNAPMAC_REMOTE_REPO"
         info "Remote 'origin' set to $SNAPMAC_REMOTE_REPO"
     else
         err "No git remote 'origin' configured"
@@ -49,21 +57,14 @@ if ! git remote get-url origin &>/dev/null; then
     fi
 fi
 
-# Ensure snapshots are not gitignored in this repo
-if git check-ignore -q "$SNAPSHOT_DIR" 2>/dev/null; then
-    warn "snapshots/ is in .gitignore — remove it to push snapshots"
-    warn "Edit .gitignore and remove the 'snapshots/' line, then retry"
-    exit 1
-fi
-
 # Stage, commit, push
-git add "$SNAPSHOT_DIR"
-if git diff --cached --quiet; then
+git -C "$SNAPSHOTS_DIR" add "$SNAPSHOT_NAME"
+if git -C "$SNAPSHOTS_DIR" diff --cached --quiet; then
     ok "No new changes to push"
     exit 0
 fi
 
-git commit -m "snapshot: $SNAPSHOT_NAME"
-git push origin HEAD
+git -C "$SNAPSHOTS_DIR" commit -m "snapshot: $SNAPSHOT_NAME"
+git -C "$SNAPSHOTS_DIR" push origin HEAD
 
 ok "Snapshot $SNAPSHOT_NAME pushed to remote"
