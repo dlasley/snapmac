@@ -563,6 +563,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Cursor extensions
+# ---------------------------------------------------------------------------
+
+info "Scanning Cursor extensions..."
+if has cursor; then
+    CURSOR_EXTS="$(cursor --list-extensions --show-versions 2>/dev/null | sed 's/@/ /' || true)"
+    if [[ -n "$CURSOR_EXTS" ]]; then
+        CURSOR_COUNT="$(echo "$CURSOR_EXTS" | wc -l | tr -d ' ')"
+        ok "Found $CURSOR_COUNT Cursor extensions"
+        emit_install_section "install_cursor_extensions" "Cursor extensions" "cursor --install-extension" "@" "$CURSOR_EXTS"
+    else
+        ok "No Cursor extensions found"
+        emit_stub_section "install_cursor_extensions" "No Cursor extensions were captured in this snapshot"
+    fi
+else
+    warn "cursor CLI not found — skipping Cursor extensions"
+    warn "To enable: open Cursor → CMD+SHIFT+P → 'Install cursor command in PATH'"
+    emit_stub_section "install_cursor_extensions" "No Cursor extensions were captured (cursor CLI was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
 # Standalone / unmanaged CLIs
 # ---------------------------------------------------------------------------
 
@@ -871,6 +892,8 @@ main() {
     install_homebrew
     echo ""
     install_from_brewfile
+    echo ""
+    install_cursor_extensions
     echo ""
     install_npm_globals
     echo ""
