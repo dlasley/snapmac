@@ -6,7 +6,13 @@
 ## Last Session Summary
 **Date**: 2026-03-27
 
-### Completed Work
+### Completed Work (this session)
+- Modularized snapshot.sh into `scripts/modules/`: brew, editors, package-managers, data-science, audio, creative, browsers, terminal, unmanaged
+- snapshot.sh is now a thin orchestrator; each module exposes a `snapshot_<name>()` function and appends to `RESTORE_MAIN_CALLS[]`
+- R packages moved to data-science module (with Jupyter kernels)
+- Coverage notes documented in module comments and memory
+
+### Completed Work (prior)
 - Created `scripts/snapshot.sh` with full package manager support and `--version=exact` flag
 - Integrated `brew bundle` for Brewfile generation; `restore.sh` handles Xcode CLT + Homebrew from scratch
 - Created GitHub repo: https://github.com/dlasley/snapmac (public)
@@ -24,7 +30,7 @@
 - None
 
 ## Pending Items
-- [ ] Add plugin/extension capture for: **Obsidian** (community plugin IDs in `~/.obsidian/community-plugins.json`, restorable), **Zed** (extensions via `zed --install-extension`, similar to Cursor), **Alfred** (workflows capturable but no restore CLI — review list only)
+- [ ] Add plugin/extension capture for: **Obsidian** (community plugin IDs in `~/.obsidian/community-plugins.json`, restorable), **Zed** (`zed --install-extension`, similar to Cursor), **Alfred** (workflows capturable, no restore CLI — review list only), **Arc** (Chromium-based, different profile path from Chrome)
 
 - [ ] Decide on `SNAPMAC_PIN_VERSIONS` — wire it up in `snapshot.sh` or drop it
 - [ ] Test `restore.sh` end-to-end on a clean macOS install or VM
