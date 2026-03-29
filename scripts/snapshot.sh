@@ -563,6 +563,65 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Sketch plugins
+# ---------------------------------------------------------------------------
+
+SKETCH_PLUGINS_DIR="$HOME/Library/Application Support/com.bohemiancoding.sketch3/Plugins"
+info "Scanning Sketch plugins..."
+if [[ -d "$SKETCH_PLUGINS_DIR" ]]; then
+    SKETCH_PLUGINS="$(find "$SKETCH_PLUGINS_DIR" -name "manifest.json" -maxdepth 3 2>/dev/null \
+        | xargs python3 -c "
+import sys, json
+for path in sys.stdin.read().splitlines():
+    try:
+        with open(path) as f:
+            m = json.load(f)
+            name = m.get('name', '')
+            ident = m.get('identifier', '')
+            if name:
+                print(f'{name}|{ident}')
+    except: pass
+" 2>/dev/null | sort -u || true)"
+
+    if [[ -n "$SKETCH_PLUGINS" ]]; then
+        SKETCH_COUNT="$(echo "$SKETCH_PLUGINS" | wc -l | tr -d ' ')"
+        ok "Found $SKETCH_COUNT Sketch plugins"
+
+        cat >> "$RESTORE" << 'EOF'
+review_sketch_plugins() {
+    info "The following Sketch plugins were installed at snapshot time."
+    info "Reinstall them via Sketch → Plugins → Browse Plugins or from the plugin's source:"
+    echo ""
+    local plugins=(
+EOF
+        while IFS='|' read -r name ident; do
+            [[ -z "$name" ]] && continue
+            if [[ -n "$ident" ]]; then
+                printf '        "%s (%s)"\n' "$name" "$ident" >> "$RESTORE"
+            else
+                printf '        "%s"\n' "$name" >> "$RESTORE"
+            fi
+        done <<< "$SKETCH_PLUGINS"
+
+        cat >> "$RESTORE" << 'EOF'
+    )
+    for p in "${plugins[@]}"; do
+        echo "  - $p"
+    done
+    echo ""
+}
+
+EOF
+    else
+        ok "No Sketch plugins found"
+        emit_stub_section "review_sketch_plugins" "No Sketch plugins were captured in this snapshot"
+    fi
+else
+    info "Sketch plugins directory not found — skipping"
+    emit_stub_section "review_sketch_plugins" "No Sketch plugins were captured (Sketch was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
 # Cursor extensions
 # ---------------------------------------------------------------------------
 
@@ -892,6 +951,8 @@ main() {
     install_homebrew
     echo ""
     install_from_brewfile
+    echo ""
+    review_sketch_plugins
     echo ""
     install_cursor_extensions
     echo ""

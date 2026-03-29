@@ -24,6 +24,8 @@
 - None
 
 ## Pending Items
+- [ ] Add plugin capture for: **Obsidian** (community plugin IDs in `~/.obsidian/community-plugins.json`, restorable), **Zed** (extensions via `zed --install-extension`, similar to Cursor), **Alfred** (workflows capturable but no restore CLI — review list only)
+
 - [ ] Decide on `SNAPMAC_PIN_VERSIONS` — wire it up in `snapshot.sh` or drop it
 - [ ] Test `restore.sh` end-to-end on a clean macOS install or VM
 - [ ] Consider snapshotting macOS system preferences via `defaults`
