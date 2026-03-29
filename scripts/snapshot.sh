@@ -253,7 +253,7 @@ source "$MODULES_DIR/editors.sh"
 source "$MODULES_DIR/package-managers.sh"
 source "$MODULES_DIR/data-science.sh"
 source "$MODULES_DIR/audio.sh"
-source "$MODULES_DIR/creative.sh"
+source "$MODULES_DIR/design.sh"
 source "$MODULES_DIR/browsers.sh"
 source "$MODULES_DIR/terminal.sh"
 source "$MODULES_DIR/unmanaged.sh"
@@ -263,7 +263,7 @@ snapshot_editors
 snapshot_package_managers
 snapshot_data_science
 snapshot_audio
-snapshot_creative
+snapshot_design
 snapshot_browsers
 snapshot_terminal
 snapshot_unmanaged
