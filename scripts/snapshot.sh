@@ -739,13 +739,15 @@ for dir in \
     "/Library/Audio/Plug-Ins/VST" \
     "$HOME/Library/Audio/Plug-Ins/VST" \
     "/Library/Audio/Plug-Ins/VST3" \
-    "$HOME/Library/Audio/Plug-Ins/VST3"; do
+    "$HOME/Library/Audio/Plug-Ins/VST3" \
+    "/Library/Application Support/Avid/Audio/Plug-Ins" \
+    "$HOME/Documents/Avid/Audio/Plug-Ins"; do
     [[ -d "$dir" ]] || continue
     while IFS= read -r plugin; do
-        name="$(basename "$plugin" | sed 's/\.\(component\|vst\|vst3\)$//')"
-        type="$(basename "$plugin" | grep -oE '\.(component|vst|vst3)$' | tr -d '.')"
+        name="$(basename "$plugin" | sed 's/\.\(component\|vst\|vst3\|aaxplugin\)$//')"
+        type="$(basename "$plugin" | grep -oE '\.(component|vst|vst3|aaxplugin)$' | tr -d '.')"
         [[ -n "$name" ]] && AUDIO_PLUGINS+="$name ($type)"$'\n'
-    done < <(find "$dir" -maxdepth 1 \( -name "*.component" -o -name "*.vst" -o -name "*.vst3" \) 2>/dev/null)
+    done < <(find "$dir" -maxdepth 1 \( -name "*.component" -o -name "*.vst" -o -name "*.vst3" -o -name "*.aaxplugin" \) 2>/dev/null)
 done
 AUDIO_PLUGINS="$(echo "$AUDIO_PLUGINS" | sort -u | sed '/^$/d')"
 
