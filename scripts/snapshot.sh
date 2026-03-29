@@ -643,6 +643,385 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# R packages
+# ---------------------------------------------------------------------------
+
+info "Scanning R packages..."
+if has Rscript; then
+    R_PKGS="$(Rscript --no-save --no-restore -e '
+ip <- installed.packages()
+user_pkgs <- ip[is.na(ip[,"Priority"]), c("Package","Version")]
+cat(paste(user_pkgs[,"Package"], user_pkgs[,"Version"], sep=" ", collapse="\n"), "\n")
+' 2>/dev/null | sed '/^$/d' || true)"
+
+    if [[ -n "$R_PKGS" ]]; then
+        R_COUNT="$(echo "$R_PKGS" | wc -l | tr -d ' ')"
+        ok "Found $R_COUNT R packages"
+
+        cat >> "$RESTORE" << 'R_FUNC'
+install_r_packages() {
+    if ! has Rscript; then
+        warn "Rscript not found — skipping R packages"
+        warn "Install R: brew install --cask r"
+        return
+    fi
+    info "Installing R packages..."
+    local packages=(
+R_FUNC
+
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            name="$(echo "$line" | awk '{print $1}')"
+            version="$(echo "$line" | awk '{print $2}')"
+            if [[ "$PIN_VERSIONS" == true ]]; then
+                printf '        "%s %s"\n' "$name" "$version" >> "$RESTORE"
+            else
+                printf '        "%s"  # %s\n' "$name" "$version" >> "$RESTORE"
+            fi
+        done <<< "$R_PKGS"
+
+        if [[ "$PIN_VERSIONS" == true ]]; then
+            cat >> "$RESTORE" << 'R_FUNC'
+    )
+    local total=${#packages[@]}
+    local i=0
+    Rscript --no-save --no-restore -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes', repos='https://cloud.r-project.org')" 2>&1
+    for p in "${packages[@]}"; do
+        ((i++)) || true
+        local pkg_name="${p%% *}"
+        local pkg_ver="${p##* }"
+        info "  [$i/$total] $pkg_name@$pkg_ver"
+        install_or_warn Rscript --no-save --no-restore -e "remotes::install_version('$pkg_name', version='$pkg_ver', repos='https://cloud.r-project.org')"
+    done
+    ok "R packages done ($total packages)"
+}
+
+R_FUNC
+        else
+            cat >> "$RESTORE" << 'R_FUNC'
+    )
+    local total=${#packages[@]}
+    local pkgs_r=""
+    for p in "${packages[@]}"; do
+        pkgs_r+="\"$p\","
+    done
+    pkgs_r="${pkgs_r%,}"
+    info "Installing $total R packages from CRAN..."
+    if Rscript --no-save --no-restore -e "install.packages(c($pkgs_r), repos='https://cloud.r-project.org')" 2>&1; then
+        ok "R packages done ($total packages)"
+    else
+        err "Some R packages failed to install"
+        ((FAILURES++)) || true
+    fi
+}
+
+R_FUNC
+        fi
+    else
+        ok "No user-installed R packages found"
+        emit_stub_section "install_r_packages" "No R packages were captured in this snapshot"
+    fi
+else
+    info "Rscript not found — skipping R packages"
+    emit_stub_section "install_r_packages" "No R packages were captured (R was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
+# AU/VST audio plugins
+# ---------------------------------------------------------------------------
+
+info "Scanning audio plugins (AU/VST)..."
+
+AUDIO_PLUGINS=""
+for dir in \
+    "/Library/Audio/Plug-Ins/Components" \
+    "$HOME/Library/Audio/Plug-Ins/Components" \
+    "/Library/Audio/Plug-Ins/VST" \
+    "$HOME/Library/Audio/Plug-Ins/VST" \
+    "/Library/Audio/Plug-Ins/VST3" \
+    "$HOME/Library/Audio/Plug-Ins/VST3"; do
+    [[ -d "$dir" ]] || continue
+    while IFS= read -r plugin; do
+        name="$(basename "$plugin" | sed 's/\.\(component\|vst\|vst3\)$//')"
+        type="$(basename "$plugin" | grep -oE '\.(component|vst|vst3)$' | tr -d '.')"
+        [[ -n "$name" ]] && AUDIO_PLUGINS+="$name ($type)"$'\n'
+    done < <(find "$dir" -maxdepth 1 \( -name "*.component" -o -name "*.vst" -o -name "*.vst3" \) 2>/dev/null)
+done
+AUDIO_PLUGINS="$(echo "$AUDIO_PLUGINS" | sort -u | sed '/^$/d')"
+
+if [[ -n "$AUDIO_PLUGINS" ]]; then
+    AUDIO_COUNT="$(echo "$AUDIO_PLUGINS" | wc -l | tr -d ' ')"
+    ok "Found $AUDIO_COUNT audio plugins"
+
+    cat >> "$RESTORE" << 'EOF'
+review_audio_plugins() {
+    info "The following AU/VST audio plugins were installed at snapshot time."
+    info "Reinstall via manufacturer websites or download managers (iLok, NI Access, etc.):"
+    echo ""
+    local plugins=(
+EOF
+    while IFS= read -r plugin; do
+        [[ -n "$plugin" ]] && printf '        "%s"\n' "$plugin" >> "$RESTORE"
+    done <<< "$AUDIO_PLUGINS"
+    cat >> "$RESTORE" << 'EOF'
+    )
+    for p in "${plugins[@]}"; do
+        echo "  - $p"
+    done
+    echo ""
+    warn "Audio plugin licenses must be reactivated independently."
+}
+
+EOF
+else
+    ok "No audio plugins found"
+    emit_stub_section "review_audio_plugins" "No audio plugins were captured in this snapshot"
+fi
+
+# ---------------------------------------------------------------------------
+# Blender addons
+# ---------------------------------------------------------------------------
+
+info "Scanning Blender addons..."
+BLENDER_BASE="$HOME/Library/Application Support/Blender"
+
+if [[ -d "$BLENDER_BASE" ]]; then
+    BLENDER_ADDONS="$(find "$BLENDER_BASE" -path "*/scripts/addons" -type d -maxdepth 5 2>/dev/null \
+        | while read -r addons_dir; do
+            ls -1 "$addons_dir" 2>/dev/null | grep -v '^__pycache__$'
+          done | sort -u || true)"
+
+    if [[ -n "$BLENDER_ADDONS" ]]; then
+        BLENDER_COUNT="$(echo "$BLENDER_ADDONS" | wc -l | tr -d ' ')"
+        ok "Found $BLENDER_COUNT Blender addons"
+
+        cat >> "$RESTORE" << 'EOF'
+review_blender_addons() {
+    info "The following Blender addons were installed at snapshot time."
+    info "Reinstall via Edit → Preferences → Add-ons → Install:"
+    echo ""
+    local addons=(
+EOF
+        while IFS= read -r addon; do
+            [[ -n "$addon" ]] && printf '        "%s"\n' "$addon" >> "$RESTORE"
+        done <<< "$BLENDER_ADDONS"
+        cat >> "$RESTORE" << 'EOF'
+    )
+    for a in "${addons[@]}"; do
+        echo "  - $a"
+    done
+    echo ""
+}
+
+EOF
+    else
+        ok "No user-installed Blender addons found"
+        emit_stub_section "review_blender_addons" "No Blender addons were captured in this snapshot"
+    fi
+else
+    info "Blender not found — skipping addons"
+    emit_stub_section "review_blender_addons" "No Blender addons were captured (Blender was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
+# Chrome extensions
+# ---------------------------------------------------------------------------
+
+info "Scanning Chrome extensions..."
+CHROME_EXTENSIONS_DIR="$HOME/Library/Application Support/Google/Chrome/Default/Extensions"
+
+if [[ -d "$CHROME_EXTENSIONS_DIR" ]]; then
+    CHROME_EXTS="$(find "$CHROME_EXTENSIONS_DIR" -name "manifest.json" -maxdepth 2 2>/dev/null \
+        | python3 -c "
+import sys, json
+for path in sys.stdin.read().splitlines():
+    try:
+        with open(path) as f:
+            m = json.load(f)
+            name = m.get('name', '').strip()
+            if name and not name.startswith('__MSG_'):
+                print(name)
+    except: pass
+" 2>/dev/null | sort -u || true)"
+
+    if [[ -n "$CHROME_EXTS" ]]; then
+        CHROME_COUNT="$(echo "$CHROME_EXTS" | wc -l | tr -d ' ')"
+        ok "Found $CHROME_COUNT Chrome extensions"
+
+        cat >> "$RESTORE" << 'EOF'
+review_chrome_extensions() {
+    info "The following Chrome extensions were installed at snapshot time."
+    info "Reinstall from the Chrome Web Store (chrome.google.com/webstore):"
+    echo ""
+    local extensions=(
+EOF
+        while IFS= read -r ext; do
+            [[ -n "$ext" ]] && printf '        "%s"\n' "$ext" >> "$RESTORE"
+        done <<< "$CHROME_EXTS"
+        cat >> "$RESTORE" << 'EOF'
+    )
+    for e in "${extensions[@]}"; do
+        echo "  - $e"
+    done
+    echo ""
+}
+
+EOF
+    else
+        ok "No Chrome extensions found"
+        emit_stub_section "review_chrome_extensions" "No Chrome extensions were captured in this snapshot"
+    fi
+else
+    info "Chrome not found — skipping extensions"
+    emit_stub_section "review_chrome_extensions" "No Chrome extensions were captured (Chrome was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
+# Firefox extensions
+# ---------------------------------------------------------------------------
+
+info "Scanning Firefox extensions..."
+FIREFOX_PROFILES_DIR="$HOME/Library/Application Support/Firefox/Profiles"
+
+if [[ -d "$FIREFOX_PROFILES_DIR" ]]; then
+    FF_EXT_FILE="$(find "$FIREFOX_PROFILES_DIR" -name "extensions.json" -maxdepth 2 2>/dev/null | head -1)"
+    FIREFOX_EXTS="$(FF_EXT_FILE="$FF_EXT_FILE" python3 -c "
+import json, os
+path = os.environ.get('FF_EXT_FILE', '')
+if not path: exit()
+try:
+    with open(path) as f:
+        data = json.load(f)
+    for addon in data.get('addons', []):
+        if addon.get('type') == 'extension' and not addon.get('id','').endswith('@mozilla.org'):
+            name = (addon.get('defaultLocale') or {}).get('name') or addon.get('name', '')
+            if name:
+                print(name)
+except: pass
+" 2>/dev/null | sort -u || true)"
+
+    if [[ -n "$FIREFOX_EXTS" ]]; then
+        FIREFOX_COUNT="$(echo "$FIREFOX_EXTS" | wc -l | tr -d ' ')"
+        ok "Found $FIREFOX_COUNT Firefox extensions"
+
+        cat >> "$RESTORE" << 'EOF'
+review_firefox_extensions() {
+    info "The following Firefox extensions were installed at snapshot time."
+    info "Reinstall from addons.mozilla.org:"
+    echo ""
+    local extensions=(
+EOF
+        while IFS= read -r ext; do
+            [[ -n "$ext" ]] && printf '        "%s"\n' "$ext" >> "$RESTORE"
+        done <<< "$FIREFOX_EXTS"
+        cat >> "$RESTORE" << 'EOF'
+    )
+    for e in "${extensions[@]}"; do
+        echo "  - $e"
+    done
+    echo ""
+}
+
+EOF
+    else
+        ok "No Firefox extensions found"
+        emit_stub_section "review_firefox_extensions" "No Firefox extensions were captured in this snapshot"
+    fi
+else
+    info "Firefox not found — skipping extensions"
+    emit_stub_section "review_firefox_extensions" "No Firefox extensions were captured (Firefox was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
+# iTerm2 profiles
+# ---------------------------------------------------------------------------
+
+info "Scanning iTerm2 profiles..."
+ITERM2_PROFILES="$(python3 -c "
+import subprocess, plistlib, sys
+try:
+    result = subprocess.run(['defaults', 'export', 'com.googlecode.iterm2', '-'], capture_output=True)
+    if result.returncode != 0:
+        sys.exit(0)
+    prefs = plistlib.loads(result.stdout)
+    for p in prefs.get('New Bookmarks', []):
+        print(p.get('Name', 'Unnamed Profile'))
+except: pass
+" 2>/dev/null || true)"
+
+if [[ -n "$ITERM2_PROFILES" ]]; then
+    ITERM2_COUNT="$(echo "$ITERM2_PROFILES" | wc -l | tr -d ' ')"
+    ok "Found $ITERM2_COUNT iTerm2 profiles"
+
+    cat >> "$RESTORE" << 'EOF'
+review_iterm2_profiles() {
+    info "The following iTerm2 profiles were configured at snapshot time."
+    info "Recreate via iTerm2 → Preferences → Profiles, or restore from a backup:"
+    echo ""
+    local profiles=(
+EOF
+    while IFS= read -r profile; do
+        [[ -n "$profile" ]] && printf '        "%s"\n' "$profile" >> "$RESTORE"
+    done <<< "$ITERM2_PROFILES"
+    cat >> "$RESTORE" << 'EOF'
+    )
+    for p in "${profiles[@]}"; do
+        echo "  - $p"
+    done
+    echo ""
+}
+
+EOF
+else
+    info "No iTerm2 profiles found (iTerm2 may not be installed)"
+    emit_stub_section "review_iterm2_profiles" "No iTerm2 profiles were captured in this snapshot"
+fi
+
+# ---------------------------------------------------------------------------
+# Jupyter kernels
+# ---------------------------------------------------------------------------
+
+info "Scanning Jupyter kernels..."
+if has jupyter; then
+    JUPYTER_KERNELS="$(jupyter kernelspec list 2>/dev/null \
+        | tail -n +2 \
+        | awk '{print $1}' \
+        | grep -v '^python3$' || true)"
+
+    if [[ -n "$JUPYTER_KERNELS" ]]; then
+        JUPYTER_COUNT="$(echo "$JUPYTER_KERNELS" | wc -l | tr -d ' ')"
+        ok "Found $JUPYTER_COUNT additional Jupyter kernels"
+
+        cat >> "$RESTORE" << 'EOF'
+review_jupyter_kernels() {
+    info "The following Jupyter kernels were installed at snapshot time (excluding default python3)."
+    info "Reinstall via the appropriate package manager for each kernel:"
+    echo ""
+    local kernels=(
+EOF
+        while IFS= read -r kernel; do
+            [[ -n "$kernel" ]] && printf '        "%s"\n' "$kernel" >> "$RESTORE"
+        done <<< "$JUPYTER_KERNELS"
+        cat >> "$RESTORE" << 'EOF'
+    )
+    for k in "${kernels[@]}"; do
+        echo "  - $k"
+    done
+    echo ""
+    info "Examples: pip install ipykernel (Python), install.packages('IRkernel') then IRkernel::installspec() (R)"
+}
+
+EOF
+    else
+        ok "No additional Jupyter kernels found"
+        emit_stub_section "review_jupyter_kernels" "No additional Jupyter kernels were captured in this snapshot"
+    fi
+else
+    info "jupyter not found — skipping kernel scan"
+    emit_stub_section "review_jupyter_kernels" "No Jupyter kernels were captured (jupyter was not installed at snapshot time)"
+fi
+
+# ---------------------------------------------------------------------------
 # Standalone / unmanaged CLIs
 # ---------------------------------------------------------------------------
 
@@ -981,6 +1360,20 @@ main() {
     install_go_binaries
     echo ""
     install_composer_packages
+    echo ""
+    install_r_packages
+    echo ""
+    review_audio_plugins
+    echo ""
+    review_blender_addons
+    echo ""
+    review_chrome_extensions
+    echo ""
+    review_firefox_extensions
+    echo ""
+    review_iterm2_profiles
+    echo ""
+    review_jupyter_kernels
     echo ""
     review_unmanaged_clis
     echo ""
